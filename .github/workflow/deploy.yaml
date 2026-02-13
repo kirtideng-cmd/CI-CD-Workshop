@@ -1,0 +1,91 @@
+name: React CI/CD Pipeline
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+
+jobs:
+  ci:
+    name: Build and Test
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+        
+      - name: Install dependencies
+        run: npm run test:run
+
+      - name: Build React app
+        run: npm run build
+
+      - name: Store build path
+        run: |
+          echo "BUILD_PATH=$(pwd)/dist" >> $GITHUB_ENV
+          echo "✅ Build available at: $(pwd)/dist"
+
+  cd:
+    name: Deploy to Production
+    needs: [ci]
+    runs-on: self-hosted
+
+    environment:
+      name: production
+      url: http://localhost:3000
+
+    steps:
+      - name: Verify build exists
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ Build directory not found!"
+            echo "This might happen if the runner cleaned up between jobs."
+            exit 1
+          fi
+          echo "✅ Build directory found"
+          ls -la dist/
+
+      - name: Deploy application
+        run: |
+          echo "🚀 Starting deployment..."
+          DEPLOY_DIR="$HOME/my-app/current"
+          mkdir -p "$DEPLOY_DIR"
+          echo "🧹 Clearing existing deployment..."
+          rm -rf "$DEPLOY_DIR"/*
+          echo "📦 Copying new build files..."
+          cp -r ./dist/* "$DEPLOY_DIR/"
+          chmod -R 755 "$DEPLOY_DIR"
+          echo "✅ Files deployed successfully to $DEPLOY_DIR"
+          echo "📁 Deployed files:"
+          ls -la "$DEPLOY_DIR"
+
+      - name: Deployment summary
+        run: |
+          echo "=============================================="
+          echo "🎉 DEPLOYMENT COMPLETE"
+          echo "=============================================="
+          echo "📍 Environment: Production"
+          echo "🌐 URL: http://localhost:3000"
+          echo "📅 Deployed at: $(date)"
+          echo "🔖 Commit: ${{ github.sha }}"
+          echo "👤 Triggered by: ${{ github.actor }}"
+          echo "=============================================="
